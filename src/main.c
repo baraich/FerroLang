@@ -1,6 +1,5 @@
 #include "ast.c"
-#include "include/ast.h"
-#include "include/parser.h"
+#include "codegen.c"
 #include "lexer.c"
 #include "parser.c"
 #include <stdio.h>
@@ -22,7 +21,8 @@ int main() {
   AstNode *translation_unit = parse_translation_unit(parser);
 
   // Printing the program to the console.
-  ast_print(translation_unit, 0);
+  const char *ir = codegen(translation_unit);
+  puts(ir);
 
   return 0;
 }

@@ -15,7 +15,9 @@ CFLAGS = -Wall -Wextra \
          -D__STDC_CONSTANT_MACROS \
          -D__STDC_FORMAT_MACROS \
          -D__STDC_LIMIT_MACROS \
+         -g \
          $(shell $(LLVM_CONFIG) --cflags)
+
 
 # Link against LLVM libs for codegen
 LDFLAGS = -L$(LLVM_LIB) \
