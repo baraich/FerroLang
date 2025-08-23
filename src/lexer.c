@@ -172,4 +172,6 @@ Token compute_next_token(Lexer *lexer) {
   case ';':
     return make_token(lexer, TOKEN_SEMICOLON);
   }
+
+  exit(1);
 };
