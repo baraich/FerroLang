@@ -19,15 +19,30 @@ AstNode *ast_new(AstNodeKind kind, Token token) {
 
 // Helper function to print text with indent.
 void print_with_indent(const char *data, int indent) {
-  printf("%*c%s", indent, ' ', data);
+  if (indent == 0) {
+    printf("%s", data);
+  } else {
+    printf("%*c%s", indent, ' ', data);
+  }
 }
 
 // Function to print AST to the console.
 void ast_print(const AstNode *node, int indent) {
   switch (node->kind) {
-  case AST_INT_LITERAL_EXPRESSION:
-    print_with_indent("AST_INT_LITERAL_EXPRESSION\n", indent);
-    break;
+  case AST_INT_LITERAL_EXPRESSION: {
+    char *s = (char *)malloc((int)node->as.literal.token.length + 1);
+    // Copy the literal value from the token
+    sprintf(s, "%.*s", (int)node->as.literal.token.length,
+            node->as.literal.token.start_ptr);
+
+    // Print the literal value of the token
+    print_with_indent("AST_INT_LITERAL_EXPRESSION(", indent);
+    print_with_indent(s, 0); // Prints the actual value
+    print_with_indent(")\n", 0);
+
+    // Free the allocated string after printing
+    free(s);
+  } break;
 
   case AST_IDENTIFIER: {
     char *s = (char *)malloc(node->as.identifier.token.length + 1);
@@ -54,7 +69,7 @@ void ast_print(const AstNode *node, int indent) {
 
   case AST_BLOCK_STATEMENT: {
     print_with_indent("AST_BLOCK_STATEMENT {\n", indent);
-    for (int i = 0; i < node->as.block_statement.statements.length; i++) {
+    for (int i = 0; i < (int)node->as.block_statement.statements.length; i++) {
       ast_print(node->as.block_statement.statements.data[i], indent + 2);
     }
     print_with_indent("}\n", indent);
@@ -73,20 +88,22 @@ void ast_print(const AstNode *node, int indent) {
     print_with_indent(s, indent);
     free(s);
 
-    for (int i = 0; i < node->as.function_declaration.parameters.length; i++) {
+    for (int i = 0; i < (int)node->as.function_declaration.parameters.length;
+         i++) {
       ast_print(node->as.function_declaration.parameters.data[i], indent + 2);
     }
     ast_print(node->as.function_declaration.block, indent);
   }; break;
 
   case AST_RETURN_STATEMENT: {
-    print_with_indent("AST_RETURN_STATEMENT: ", indent);
+    print_with_indent("AST_RETURN_STATEMENT: \n", indent);
     ast_print(node->as.return_statement.value, indent + 2);
   } break;
 
   case AST_TRANSLATION_UNIT:
-    print_with_indent("AST_TRANSLATION_UNTI", indent);
-    for (int i = 0; i < node->as.translation_unit.declarations.length; i++) {
+    print_with_indent("AST_TRANSLATION_UNIT\n", indent);
+    for (int i = 0; i < (int)node->as.translation_unit.declarations.length;
+         i++) {
       ast_print(node->as.translation_unit.declarations.data[i], indent + 2);
     }
     break;

@@ -12,7 +12,7 @@ typedef struct {
 SpecialWord special_words[] = {{"int", TOKEN_INT}, {"return", TOKEN_RETURN}};
 
 // Function to intialise the lexer.
-void init_lexer(Lexer *lexer, const char *source_code) {
+void lexer_init(Lexer *lexer, const char *source_code) {
   // Setting the fields of the lexer.
   lexer->line = 1;
   lexer->column = 0;

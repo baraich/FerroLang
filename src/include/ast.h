@@ -4,7 +4,7 @@
 #include "helpers.h"
 #include "lexer.h"
 
-// Possible node categories. 
+// Possible node categories.
 typedef enum {
   // Declarations.
   AST_TRANSLATION_UNIT,
@@ -26,7 +26,7 @@ typedef enum {
 struct AstNode;
 typedef struct AstNode AstNode;
 
-// Represents integers, 
+// Represents integers,
 // FUTURE: floats, booleans and strings.
 typedef struct {
   Token token;
@@ -48,7 +48,7 @@ typedef struct {
   Token return_type;
   Token fn_name;
   Vector(AstNode *) parameters;
-  AstNode* block;
+  AstNode *block;
 } AstFunctionDeclaration;
 
 // Represents a block.

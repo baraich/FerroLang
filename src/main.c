@@ -1,29 +1,28 @@
-#include "include/lexer.h"
+#include "ast.c"
+#include "include/ast.h"
+#include "include/parser.h"
 #include "lexer.c"
+#include "parser.c"
 #include <stdio.h>
 #include <stdlib.h>
 
 int main() {
   // FUTURE: Update this to read the actual file content.
-  const char *source_code = "int main() { return 0; }\0";
+  const char *source_code = "int main() {return 0;}\0";
 
   // Initalising the lexer.
   Lexer *lexer = (Lexer *)(malloc(sizeof(Lexer)));
-  init_lexer(lexer, source_code);
+  lexer_init(lexer, source_code);
 
-  // Printing tokens to the console.
-  for (;;) {
-    // Getting the next token from the lexer.
-    Token token = compute_next_token(lexer);
+  // Initalising the parser.
+  Parser *parser = (Parser *)(malloc(sizeof(Parser)));
+  parser_init(parser, lexer);
 
-    // Printing the token to the console.
-    printf("%s\n", token_kind_to_string(token.kind));
+  // Generating a translation unit
+  AstNode *translation_unit = parse_translation_unit(parser);
 
-    // Breaking the loop.
-    if (token.kind == TOKEN_EOF) {
-      break;
-    }
-  }
+  // Printing the program to the console.
+  ast_print(translation_unit, 0);
 
   return 0;
 }
