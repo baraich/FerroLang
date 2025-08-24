@@ -1,0 +1,11 @@
+int get_exit_status() {
+  return 0;
+}
+
+# Each program must have a main function.
+# Is is executed automatically.
+int main() {
+  # Returning 0,
+  # 0 means the program executed successfully.
+  return get_exit_status();
+}

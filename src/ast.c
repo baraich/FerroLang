@@ -5,13 +5,13 @@
 
 // Function to generate Abstract Syntax Tree (AST).
 AstNode *ast_new(AstNodeKind kind, Token token) {
-  // Allocate memory for the AST.
-  AstNode *node = (AstNode *)(malloc(sizeof(AstNode)));
+  AstNode *node = malloc(sizeof(AstNode));
+  if (!node) {
+    fprintf(stderr, "Memory allocation failed\n");
+    exit(1);
+  }
 
-  // Initialise newly setted memory to 0.
   memset(node, 0, sizeof(*node));
-
-  // Return the node.
   node->kind = kind;
   node->token = token;
   return node;
@@ -55,12 +55,18 @@ void ast_print(const AstNode *node, int indent) {
   } break;
 
   case AST_PARAMETER: {
-    char *s = (char *)malloc(node->as.parameter.parameter_name.length +
-                             node->as.parameter.parameter_type.length + 1);
+    size_t name_len = node->as.parameter.parameter_name.length;
+    size_t type_len = node->as.parameter.parameter_type.length;
+    size_t format_len = 10;
 
-    sprintf(s, "-> %.*s(%.*s)\n", (int)node->as.parameter.parameter_name.length,
-            node->as.parameter.parameter_name.start_ptr,
-            (int)node->as.parameter.parameter_type.length,
+    char *s = malloc(name_len + type_len + format_len);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+
+    sprintf(s, "-> %.*s(%.*s)\n", (int)name_len,
+            node->as.parameter.parameter_name.start_ptr, (int)type_len,
             node->as.parameter.parameter_type.start_ptr);
 
     print_with_indent(s, indent);
@@ -109,3 +115,43 @@ void ast_print(const AstNode *node, int indent) {
     break;
   }
 };
+
+void ast_free(AstNode *node) {
+  if (!node)
+    return;
+
+  switch (node->kind) {
+  case AST_TRANSLATION_UNIT:
+    for (size_t i = 0; i < node->as.translation_unit.declarations.length; i++) {
+      ast_free(node->as.translation_unit.declarations.data[i]);
+    }
+    vec_free(AstNode *, &node->as.translation_unit.declarations);
+    break;
+
+  case AST_FUNCTION_DECLARATION:
+    for (size_t i = 0; i < node->as.function_declaration.parameters.length;
+         i++) {
+      ast_free(node->as.function_declaration.parameters.data[i]);
+    }
+    vec_free(AstNode *, &node->as.function_declaration.parameters);
+    ast_free(node->as.function_declaration.block);
+    break;
+
+  case AST_BLOCK_STATEMENT:
+    for (size_t i = 0; i < node->as.block_statement.statements.length; i++) {
+      ast_free(node->as.block_statement.statements.data[i]);
+    }
+    vec_free(AstNode *, &node->as.block_statement.statements);
+    break;
+
+  case AST_RETURN_STATEMENT:
+    ast_free(node->as.return_statement.value);
+    break;
+
+  // Other cases don't have child nodes to free
+  default:
+    break;
+  }
+
+  free(node);
+}

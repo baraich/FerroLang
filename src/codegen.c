@@ -9,15 +9,15 @@
 #include <string.h>
 
 // Helper function to substring a string.
-const char *substring(const char *base, size_t length) {
-  char *substring = (char *)malloc(length + 1);
-
-  // Copying a part of string to a @substring
-  strncpy(substring, base, length);
-  substring[length] = '\0';
-
-  // Returning the substring;
-  return substring;
+char *substring(const char *base, size_t length) {
+  char *result = malloc(length + 1);
+  if (!result) {
+    fprintf(stderr, "Memory allocation failed\n");
+    exit(1);
+  }
+  strncpy(result, base, length);
+  result[length] = '\0';
+  return result;
 }
 
 // Helper function to convert primitive type to LLVM type.
@@ -41,13 +41,13 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
                                LLVMBuilderRef builder) {
   switch (node->kind) {
   case AST_INT_LITERAL_EXPRESSION: {
-    int value = atoi(substring(node->as.literal.token.start_ptr,
-                               node->as.literal.token.length));
+    char *value_str = substring(node->as.literal.token.start_ptr,
+                                node->as.literal.token.length);
+    int value = atoi(value_str);
+    free(value_str);
 
-    // Building the llvm value.
     LLVMTypeRef i8 = LLVMInt8TypeInContext(llvm_context);
-    return LLVMConstInt(i8, value,
-                        0); // Fixed: third parameter should be 0 (signed)
+    return LLVMConstInt(i8, value, 0);
   } break;
   case AST_RETURN_STATEMENT: {
     // Building a return statement in IR.
@@ -84,7 +84,7 @@ void convert_declaration(AstNode *node, LLVMModuleRef llvm_module,
 
     // Defining the function block.
     LLVMBasicBlockRef fn_main =
-        LLVMAppendBasicBlockInContext(llvm_context, fn, "entry");
+        LLVMAppendBasicBlockInContext(llvm_context, fn, "main");
 
     // Positioning the builder in the function block.
     LLVMPositionBuilderAtEnd(builder, fn_main);

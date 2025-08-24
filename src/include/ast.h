@@ -85,5 +85,6 @@ AstNode *ast_new(AstNodeKind kind, Token token);
 
 // Function to print AST to the console.
 void ast_print(const AstNode *node, int indent);
+void ast_free(AstNode *node);
 
 #endif

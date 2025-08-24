@@ -84,7 +84,8 @@ void skip_whitespaces_and_comments(Lexer *lexer) {
       do {
         advance(lexer);
         lexer->column++;
-      } while (peek(lexer) != '\n' || peek(lexer) != '\0');
+      } while (peek(lexer) != '\n' && peek(lexer) != '\0');
+      break;
 
     default:
       // If the program execution reaches here,

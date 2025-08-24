@@ -41,9 +41,12 @@ bool is_primitive_type(TokenKind token_kind) {
 Token advance_with_expect(Parser *parser, TokenKind expected_token_kind) {
   if (check(parser, expected_token_kind)) {
     return advance_parser(parser);
-  };
+  }
 
-  printf("Did not expect this token");
+  fprintf(stderr, "Parse error: Expected %s but got %s at line %zu\n",
+          token_kind_to_string(expected_token_kind),
+          token_kind_to_string(parser->current_token.kind),
+          parser->current_token.line);
   exit(1);
 }
 
@@ -91,9 +94,9 @@ AstNode *parse_block(Parser *parser) {
   advance_with_expect(parser, TOKEN_LBRACE);
   AstNode *block_statement =
       ast_new(AST_BLOCK_STATEMENT, parser->current_token);
-  block_statement->as.block_statement.statements.data = NULL;
-  block_statement->as.block_statement.statements.length = 0;
-  block_statement->as.block_statement.statements.capacity = 0;
+
+  // Use the helper macro instead of manual initialization
+  vec_init(AstNode *, &block_statement->as.block_statement.statements);
 
   while (!check(parser, TOKEN_RBRACE) && !check(parser, TOKEN_EOF)) {
     AstNode *statement = parse_statement(parser);
