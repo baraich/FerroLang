@@ -6,6 +6,7 @@
 // Avaiable Token Possibilites.
 typedef enum {
   TOKEN_INT,
+  TOKEN_VOID,
   TOKEN_STRING,
   TOKEN_RETURN,
   TOKEN_FOREIGN,

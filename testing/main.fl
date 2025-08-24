@@ -1,10 +1,13 @@
 # Foreign function to print a number to console.
 @foreign("io.c", "println")
-int println(String msg);
+void println(String msg);
 
 # Each program must have a main function.
 # This function is executed automatically.
 int main() {
+  # Printing to the console.
   println("Hello, World!");
+
+  # 0 means the program executed successfully.
   return 0;
 }

@@ -12,7 +12,8 @@ typedef struct {
 SpecialWord special_words[] = {{"int", TOKEN_INT},
                                {"return", TOKEN_RETURN},
                                {"String", TOKEN_STRING},
-                               {"@foreign", TOKEN_FOREIGN}};
+                               {"@foreign", TOKEN_FOREIGN},
+                               {"void", TOKEN_VOID}};
 
 // Function to intialise the lexer.
 void lexer_init(Lexer *lexer, const char *source_code) {
@@ -26,6 +27,8 @@ void lexer_init(Lexer *lexer, const char *source_code) {
 // Function to convert the token kind to string.
 const char *token_kind_to_string(TokenKind token_kind) {
   switch (token_kind) {
+  case TOKEN_VOID:
+    return "TOKEN_VOID";
   case TOKEN_INT:
     return "TOKEN_INT";
   case TOKEN_STRING:

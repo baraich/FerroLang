@@ -34,6 +34,8 @@ bool is_primitive_type(TokenKind token_kind) {
     return true;
   case TOKEN_STRING:
     return true;
+  case TOKEN_VOID:
+    return true;
   default:
     return false;
   }
@@ -140,11 +142,19 @@ AstNode *parse_expression(Parser *parser) {
 
 // Helper function to parser return statement.
 AstNode *parse_return_statement(Parser *parser) {
+  // If the next token is a semicolon, it's a bare return
+  if (check(parser, TOKEN_SEMICOLON)) {
+    AstNode *node = ast_new(AST_RETURN_STATEMENT, parser->current_token);
+    node->as.return_statement.value = NULL;
+    advance_with_expect(parser, TOKEN_SEMICOLON);
+    return node;
+  }
+
+  // Otherwise parse the expression
   AstNode *expression = parse_expression(parser);
   AstNode *node = ast_new(AST_RETURN_STATEMENT, parser->current_token);
   node->as.return_statement.value = expression;
   advance_with_expect(parser, TOKEN_SEMICOLON);
-
   return node;
 }
 

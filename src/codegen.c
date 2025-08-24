@@ -63,6 +63,8 @@ LLVMTypeRef
 get_llvm_equivalent_for_primitive_type(Token primitive_type_token,
                                        LLVMContextRef llvm_context) {
   switch (primitive_type_token.kind) {
+  case TOKEN_VOID:
+    return LLVMVoidTypeInContext(llvm_context);
   case TOKEN_INT:
     return LLVMInt8TypeInContext(llvm_context);
     break;
@@ -158,16 +160,24 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
       free(args);
     free(fn_name);
 
+    LLVMTypeRef fn_type = LLVMGlobalGetValueType(function);
+    LLVMTypeRef return_type = LLVMGetReturnType(fn_type);
+    if (LLVMGetTypeKind(return_type) == LLVMVoidTypeKind)
+      return NULL; // Don't propagate result if it's void
+
     return call_result;
   } break;
 
   case AST_RETURN_STATEMENT: {
-    // Building a return statement in IR.
-    AstNode *return_node = node->as.return_statement.value;
-    LLVMValueRef return_value =
-        convert_statement(return_node, llvm_module, llvm_context, builder);
-    LLVMBuildRet(builder, return_value);
-    return return_value; // Return the value for consistency
+    if (node->as.return_statement.value) {
+      LLVMValueRef return_value = convert_statement(
+          node->as.return_statement.value, llvm_module, llvm_context, builder);
+      LLVMBuildRet(builder, return_value);
+    } else {
+      // For void functions
+      LLVMBuildRetVoid(builder);
+    }
+    return NULL;
   } break;
   default:
     printf("Should not have reached this part - statement\n");
