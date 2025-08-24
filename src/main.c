@@ -59,6 +59,7 @@ int main() {
 
   // Generating a translation unit
   AstNode *translation_unit = parse_translation_unit(parser);
+  // ast_print(translation_unit, 0);
 
   // Printing the program to the console.
   const char *ir = codegen(translation_unit);

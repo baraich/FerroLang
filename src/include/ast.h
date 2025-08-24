@@ -19,7 +19,8 @@ typedef enum {
 
   // Expressions
   AST_INT_LITERAL_EXPRESSION,
-  AST_IDENTIFIER
+  AST_CALL_EXPRESSION,
+  AST_IDENTIFIER_EXPRESSION
 } AstNodeKind;
 
 // Forward declaration for AstNode.
@@ -66,6 +67,12 @@ typedef struct {
   Vector(AstNode *) declarations;
 } AstTranslationUnit;
 
+// Represents a function call.
+typedef struct {
+  AstNode *callee;
+  Vector(AstNode *) arguments;
+} AstCallExpression;
+
 struct AstNode {
   Token token;
   AstNodeKind kind;
@@ -77,6 +84,7 @@ struct AstNode {
     AstLiteral literal;
     AstReturnStatement return_statement;
     AstIdentifer identifier;
+    AstCallExpression call_expression;
   } as;
 };
 

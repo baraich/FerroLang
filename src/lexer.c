@@ -39,6 +39,8 @@ const char *token_kind_to_string(TokenKind token_kind) {
     return "TOKEN_RBRACE";
   case TOKEN_SEMICOLON:
     return "TOKEN_SEMICOLON";
+  case TOKEN_COMMA:
+    return "TOKEN_COMMA";
   case TOKEN_IDENTIFIER:
     return "TOKEN_IDENTIFIER";
   case TOKEN_EOF:
@@ -172,6 +174,8 @@ Token compute_next_token(Lexer *lexer) {
     return make_token(lexer, TOKEN_RBRACE);
   case ';':
     return make_token(lexer, TOKEN_SEMICOLON);
+  case ',':
+    return make_token(lexer, TOKEN_COMMA);
   }
 
   exit(1);

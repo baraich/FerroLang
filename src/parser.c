@@ -50,6 +50,26 @@ Token advance_with_expect(Parser *parser, TokenKind expected_token_kind) {
   exit(1);
 }
 
+// Helper function to parse a parameter.
+AstNode *parse_parameter(Parser *parser) {
+  // Expect a primitive type first
+  if (!is_primitive_type(parser->current_token.kind)) {
+    fprintf(stderr,
+            "Parse error: Expected primitive type for parameter at line %zu\n",
+            parser->current_token.line);
+    exit(1);
+  }
+
+  Token type_token = advance_parser(parser);
+  Token name_token = advance_with_expect(parser, TOKEN_IDENTIFIER);
+
+  AstNode *param_node = ast_new(AST_PARAMETER, type_token);
+  param_node->as.parameter.parameter_type = type_token;
+  param_node->as.parameter.parameter_name = name_token;
+
+  return param_node;
+}
+
 // Helper function to parse expression.
 AstNode *parse_expression(Parser *parser) {
   switch (parser->current_token.kind) {
@@ -59,12 +79,54 @@ AstNode *parse_expression(Parser *parser) {
     node->as.literal.token = t;
     return node;
   }
+  case TOKEN_IDENTIFIER: {
+    Token t = advance_parser(parser);
+
+    // Check if this is a function call
+    if (check(parser, TOKEN_LPAREN)) {
+      // This is a function call
+      advance_parser(parser); // consume '('
+
+      AstNode *call_node = ast_new(AST_CALL_EXPRESSION, t);
+
+      // Create callee node (identifier)
+      AstNode *callee = ast_new(AST_IDENTIFIER_EXPRESSION, t);
+      callee->as.identifier.token = t;
+      call_node->as.call_expression.callee = callee;
+
+      // Initialize arguments vector
+      vec_init(AstNode *, &call_node->as.call_expression.arguments);
+
+      // Parse arguments if any
+      if (!check(parser, TOKEN_RPAREN)) {
+        do {
+          AstNode *arg = parse_expression(parser);
+          vec_push(AstNode *, &call_node->as.call_expression.arguments, arg);
+
+          if (check(parser, TOKEN_COMMA)) {
+            advance_parser(parser); // consume ','
+          } else {
+            break;
+          }
+        } while (true);
+      }
+
+      advance_with_expect(parser, TOKEN_RPAREN);
+      return call_node;
+    } else {
+      // This is just an identifier
+      AstNode *node = ast_new(AST_IDENTIFIER_EXPRESSION, t);
+      node->as.identifier.token = t;
+      return node;
+    }
+  }
   default:
     break;
   }
 
-  printf("%.*s", (int)parser->current_token.length,
-         parser->current_token.start_ptr);
+  fprintf(stderr, "Parse error: Unexpected token %s at line %zu\n",
+          token_kind_to_string(parser->current_token.kind),
+          parser->current_token.line);
   exit(1);
 }
 
@@ -86,7 +148,10 @@ AstNode *parse_statement(Parser *parser) {
     return parse_return_statement(parser);
   }
 
-  return parse_expression(parser);
+  // Parse expression statement
+  AstNode *expr = parse_expression(parser);
+  advance_with_expect(parser, TOKEN_SEMICOLON);
+  return expr;
 }
 
 // Helper function to parse a block.
@@ -116,19 +181,33 @@ AstNode *parse_function_declaration(Parser *parser) {
   Token fn_name = advance_with_expect(parser, TOKEN_IDENTIFIER);
 
   advance_with_expect(parser, TOKEN_LPAREN);
-  // TODO: Add ability to parse parameters.
-  advance_with_expect(parser, TOKEN_RPAREN);
-
-  // Parsing the funciton block.
-  AstNode *block = parse_block(parser);
 
   // Creating a function node.
   AstNode *fn_node = ast_new(AST_FUNCTION_DECLARATION, return_type);
   fn_node->as.function_declaration.return_type = return_type;
   fn_node->as.function_declaration.fn_name = fn_name;
-  fn_node->as.function_declaration.parameters.data = NULL;
-  fn_node->as.function_declaration.parameters.length = 0;
-  fn_node->as.function_declaration.parameters.capacity = 0;
+
+  // Initialize parameters vector
+  vec_init(AstNode *, &fn_node->as.function_declaration.parameters);
+
+  // Parse parameters if any
+  if (!check(parser, TOKEN_RPAREN)) {
+    do {
+      AstNode *param = parse_parameter(parser);
+      vec_push(AstNode *, &fn_node->as.function_declaration.parameters, param);
+
+      if (check(parser, TOKEN_COMMA)) {
+        advance_parser(parser); // consume ','
+      } else {
+        break;
+      }
+    } while (true);
+  }
+
+  advance_with_expect(parser, TOKEN_RPAREN);
+
+  // Parsing the function block.
+  AstNode *block = parse_block(parser);
   fn_node->as.function_declaration.block = block;
 
   return fn_node;
@@ -140,16 +219,13 @@ AstNode *parse_declarations(Parser *parser) {
     return parse_function_declaration(parser);
   }
 
-  // TODO: Remove this
-  exit(1);
+  return parse_statement(parser);
 }
 
 // Parse translation unit.
 AstNode *parse_translation_unit(Parser *parser) {
   AstNode *unit = ast_new(AST_TRANSLATION_UNIT, parser->current_token);
-  unit->as.translation_unit.declarations.data = NULL;
-  unit->as.translation_unit.declarations.length = 0;
-  unit->as.translation_unit.declarations.capacity = 0;
+  vec_init(AstNode *, &unit->as.translation_unit.declarations);
 
   while (!check(parser, TOKEN_EOF)) {
     vec_push(AstNode *, &unit->as.translation_unit.declarations,

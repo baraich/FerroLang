@@ -30,10 +30,17 @@ void print_with_indent(const char *data, int indent) {
 void ast_print(const AstNode *node, int indent) {
   switch (node->kind) {
   case AST_INT_LITERAL_EXPRESSION: {
-    char *s = (char *)malloc((int)node->as.literal.token.length + 1);
+    size_t buffer_size =
+        (int)node->as.literal.token.length + 50; // Extra space for format
+    char *s = (char *)malloc(buffer_size);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+
     // Copy the literal value from the token
-    sprintf(s, "%.*s", (int)node->as.literal.token.length,
-            node->as.literal.token.start_ptr);
+    snprintf(s, buffer_size, "%.*s", (int)node->as.literal.token.length,
+             node->as.literal.token.start_ptr);
 
     // Print the literal value of the token
     print_with_indent("AST_INT_LITERAL_EXPRESSION(", indent);
@@ -44,11 +51,17 @@ void ast_print(const AstNode *node, int indent) {
     free(s);
   } break;
 
-  case AST_IDENTIFIER: {
-    char *s = (char *)malloc(node->as.identifier.token.length + 1);
-    sprintf(s, "%s(%.*s)\n", "AST_IDENTIFIER",
-            (int)node->as.identifier.token.length,
-            node->as.identifier.token.start_ptr);
+  case AST_IDENTIFIER_EXPRESSION: {
+    size_t buffer_size =
+        node->as.identifier.token.length + 50; // Extra space for format string
+    char *s = (char *)malloc(buffer_size);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+    snprintf(s, buffer_size, "%s(%.*s)\n", "AST_IDENTIFIER_EXPRESSION",
+             (int)node->as.identifier.token.length,
+             node->as.identifier.token.start_ptr);
 
     print_with_indent(s, indent);
     free(s);
@@ -57,17 +70,17 @@ void ast_print(const AstNode *node, int indent) {
   case AST_PARAMETER: {
     size_t name_len = node->as.parameter.parameter_name.length;
     size_t type_len = node->as.parameter.parameter_type.length;
-    size_t format_len = 10;
+    size_t buffer_size = name_len + type_len + 20; // Extra space for format
 
-    char *s = malloc(name_len + type_len + format_len);
+    char *s = malloc(buffer_size);
     if (!s) {
       fprintf(stderr, "Memory allocation failed\n");
       exit(1);
     }
 
-    sprintf(s, "-> %.*s(%.*s)\n", (int)name_len,
-            node->as.parameter.parameter_name.start_ptr, (int)type_len,
-            node->as.parameter.parameter_type.start_ptr);
+    snprintf(s, buffer_size, "-> %.*s(%.*s)\n", (int)type_len,
+             node->as.parameter.parameter_type.start_ptr, (int)name_len,
+             node->as.parameter.parameter_name.start_ptr);
 
     print_with_indent(s, indent);
     free(s);
@@ -82,28 +95,65 @@ void ast_print(const AstNode *node, int indent) {
   } break;
 
   case AST_FUNCTION_DECLARATION: {
-    char *s =
-        (char *)malloc(node->as.function_declaration.fn_name.length +
-                       node->as.function_declaration.return_type.length + 1);
-    sprintf(s, "%.*s(%.*s)\n",
-            (int)node->as.function_declaration.fn_name.length,
-            node->as.function_declaration.fn_name.start_ptr,
-            (int)node->as.function_declaration.return_type.length,
-            node->as.function_declaration.return_type.start_ptr);
+    size_t buffer_size = node->as.function_declaration.fn_name.length +
+                         node->as.function_declaration.return_type.length + 50;
+    char *s = (char *)malloc(buffer_size);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+
+    snprintf(s, buffer_size, "AST_FUNCTION_DECLARATION %.*s(%.*s)\n",
+             (int)node->as.function_declaration.fn_name.length,
+             node->as.function_declaration.fn_name.start_ptr,
+             (int)node->as.function_declaration.return_type.length,
+             node->as.function_declaration.return_type.start_ptr);
 
     print_with_indent(s, indent);
     free(s);
 
-    for (int i = 0; i < (int)node->as.function_declaration.parameters.length;
-         i++) {
-      ast_print(node->as.function_declaration.parameters.data[i], indent + 2);
+    // Print parameters
+    if (node->as.function_declaration.parameters.length > 0) {
+      print_with_indent("Parameters:\n", indent + 2);
+      for (int i = 0; i < (int)node->as.function_declaration.parameters.length;
+           i++) {
+        ast_print(node->as.function_declaration.parameters.data[i], indent + 4);
+      }
     }
-    ast_print(node->as.function_declaration.block, indent);
+
+    // Print function body
+    ast_print(node->as.function_declaration.block, indent + 2);
   }; break;
 
   case AST_RETURN_STATEMENT: {
     print_with_indent("AST_RETURN_STATEMENT: \n", indent);
     ast_print(node->as.return_statement.value, indent + 2);
+  } break;
+
+  case AST_CALL_EXPRESSION: {
+    print_with_indent("AST_CALL_EXPRESSION\n", indent);
+
+    size_t buffer_size = node->as.call_expression.callee->token.length + 20;
+    char *s = (char *)malloc(buffer_size);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+
+    snprintf(s, buffer_size, "Callee: %.*s\n",
+             (int)node->as.call_expression.callee->token.length,
+             node->as.call_expression.callee->token.start_ptr);
+
+    print_with_indent(s, indent + 2);
+    free(s);
+
+    // Print arguments if any
+    if (node->as.call_expression.arguments.length > 0) {
+      print_with_indent("Arguments:\n", indent + 2);
+      for (int i = 0; i < (int)node->as.call_expression.arguments.length; i++) {
+        ast_print(node->as.call_expression.arguments.data[i], indent + 4);
+      }
+    }
   } break;
 
   case AST_TRANSLATION_UNIT:
@@ -143,6 +193,14 @@ void ast_free(AstNode *node) {
     }
     vec_free(AstNode *, &node->as.block_statement.statements);
     break;
+
+  case AST_CALL_EXPRESSION: {
+    ast_free(node->as.call_expression.callee);
+    for (size_t i = 0; i < node->as.call_expression.arguments.length; i++) {
+      ast_free(node->as.call_expression.arguments.data[i]);
+    }
+    vec_free(AstNode *, &node->as.call_expression.arguments);
+  } break;
 
   case AST_RETURN_STATEMENT:
     ast_free(node->as.return_statement.value);
