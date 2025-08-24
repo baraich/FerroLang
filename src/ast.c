@@ -29,6 +29,37 @@ void print_with_indent(const char *data, int indent) {
 // Function to print AST to the console.
 void ast_print(const AstNode *node, int indent) {
   switch (node->kind) {
+  case AST_FOREIGN_DECLARATION: {
+
+    char *s = (char *)malloc(node->as.foreign_declaration.fn_name.length + 1);
+    sprintf(s, "%.*s", (int)node->as.foreign_declaration.fn_name.length,
+            node->as.foreign_declaration.fn_name.start_ptr);
+    print_with_indent("AST_FOREIGN_DECLARATION(", indent);
+    print_with_indent(s, 0);
+    print_with_indent(")\n", 0);
+  } break;
+  case AST_STRING_LITERAL_EXPRESSION: {
+    size_t buffer_size = (int)node->as.string_literal.token.length +
+                         50; // Extra space for format
+    char *s = (char *)malloc(buffer_size);
+    if (!s) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(1);
+    }
+
+    // Copy the literal value from the token
+    snprintf(s, buffer_size, "%.*s", (int)node->as.string_literal.token.length,
+             node->as.string_literal.token.start_ptr);
+
+    // Print the literal value of the token
+    print_with_indent("AST_STRING_LITERAL_EXPRESSION(", indent);
+    print_with_indent(s, 0); // Prints the actual value
+    print_with_indent(")\n", 0);
+
+    // Free the allocated string after printing
+    free(s);
+  } break;
+    ;
   case AST_INT_LITERAL_EXPRESSION: {
     size_t buffer_size =
         (int)node->as.literal.token.length + 50; // Extra space for format

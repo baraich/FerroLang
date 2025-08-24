@@ -1,12 +1,10 @@
-# Helper function to return exit status code.
-int get_exit_status() {
-  return 0;
-}
+# Foreign function to print a number to console.
+@foreign("io.c", "println")
+int println(String msg);
 
 # Each program must have a main function.
-# Is is executed automatically.
+# This function is executed automatically.
 int main() {
-  # Returning 0,
-  # 0 means the program executed successfully.
-  return get_exit_status();
+  println("Hello, World!");
+  return 0;
 }

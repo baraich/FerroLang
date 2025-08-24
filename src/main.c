@@ -1,5 +1,6 @@
 #include "ast.c"
 #include "codegen.c"
+#include "include/lexer.h"
 #include "lexer.c"
 #include "parser.c"
 #include <stdio.h>
@@ -52,6 +53,12 @@ int main() {
   // Initalising the lexer.
   Lexer *lexer = (Lexer *)(malloc(sizeof(Lexer)));
   lexer_init(lexer, source_code);
+
+  // Token t = compute_next_token(lexer);
+  // while (t.kind != TOKEN_EOF) {
+  //   printf("%s\n", token_kind_to_string(t.kind));
+  //   t = compute_next_token(lexer);
+  // }
 
   // Initalising the parser.
   Parser *parser = (Parser *)(malloc(sizeof(Parser)));

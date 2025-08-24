@@ -9,6 +9,7 @@ typedef enum {
   // Declarations.
   AST_TRANSLATION_UNIT,
   AST_FUNCTION_DECLARATION,
+  AST_FOREIGN_DECLARATION,
 
   // Node
   AST_PARAMETER,
@@ -19,6 +20,7 @@ typedef enum {
 
   // Expressions
   AST_INT_LITERAL_EXPRESSION,
+  AST_STRING_LITERAL_EXPRESSION,
   AST_CALL_EXPRESSION,
   AST_IDENTIFIER_EXPRESSION
 } AstNodeKind;
@@ -28,10 +30,15 @@ struct AstNode;
 typedef struct AstNode AstNode;
 
 // Represents integers,
-// FUTURE: floats, booleans and strings.
+// FUTURE: floats, boolean.
 typedef struct {
   Token token;
 } AstLiteral;
+
+// Represents a string.
+typedef struct {
+  Token token;
+} AstStringLiteral;
 
 // Represents an identifer.
 typedef struct {
@@ -73,6 +80,15 @@ typedef struct {
   Vector(AstNode *) arguments;
 } AstCallExpression;
 
+// Represents a foreign function.
+typedef struct {
+  Token return_type;
+  Token fn_name;
+  Token source_path;
+  Token symbol_name;
+  Vector(AstNode *) parameters;
+} AstForeignDeclaration;
+
 struct AstNode {
   Token token;
   AstNodeKind kind;
@@ -85,6 +101,8 @@ struct AstNode {
     AstReturnStatement return_statement;
     AstIdentifer identifier;
     AstCallExpression call_expression;
+    AstForeignDeclaration foreign_declaration;
+    AstStringLiteral string_literal;
   } as;
 };
 

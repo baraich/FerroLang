@@ -67,6 +67,14 @@ get_llvm_equivalent_for_primitive_type(Token primitive_type_token,
     return LLVMInt8TypeInContext(llvm_context);
     break;
 
+  case TOKEN_STRING: {
+    LLVMTypeRef i8_ptr =
+        LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
+    LLVMTypeRef len_type = LLVMInt8TypeInContext(llvm_context);
+    LLVMTypeRef members[] = {i8_ptr, len_type};
+    return LLVMStructTypeInContext(llvm_context, members, 2, false);
+  } break;
+
   default:
     fprintf(stderr, "Error: %s is not a primitive type.",
             token_kind_to_string(primitive_type_token.kind));
@@ -88,12 +96,36 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
     return LLVMConstInt(i8, value, 0);
   } break;
 
+  case AST_STRING_LITERAL_EXPRESSION: {
+    // Strip quotes
+    char *raw = substring(node->as.string_literal.token.start_ptr + 1,
+                          node->as.string_literal.token.length - 2);
+
+    size_t len = strlen(raw);
+
+    // Create a global constant string
+    LLVMValueRef str_ptr = LLVMBuildGlobalStringPtr(builder, raw, "str");
+    free(raw);
+
+    LLVMTypeRef i8_ptr =
+        LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
+    LLVMTypeRef len_type = LLVMInt8TypeInContext(llvm_context);
+    LLVMTypeRef members[] = {i8_ptr, len_type};
+    LLVMTypeRef string_type =
+        LLVMStructTypeInContext(llvm_context, members, 2, false);
+
+    LLVMValueRef tmp = LLVMGetUndef(string_type);
+    tmp = LLVMBuildInsertValue(builder, tmp, str_ptr, 0, "str_data");
+    tmp = LLVMBuildInsertValue(builder, tmp, LLVMConstInt(len_type, len, 0), 1,
+                               "str_len");
+
+    return tmp;
+  } break;
+
   case AST_CALL_EXPRESSION: {
-    // Get function name
     char *fn_name = substring(node->as.call_expression.callee->token.start_ptr,
                               node->as.call_expression.callee->token.length);
 
-    // Find function in symbol table
     LLVMValueRef function = find_function_in_symbol_table(fn_name);
     if (!function) {
       fprintf(stderr, "Error: Function '%s' not found\n", fn_name);
@@ -101,25 +133,29 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
       exit(1);
     }
 
-    // Convert arguments
     LLVMValueRef *args = NULL;
     if (node->as.call_expression.arguments.length > 0) {
       args = malloc(node->as.call_expression.arguments.length *
                     sizeof(LLVMValueRef));
+
       for (size_t i = 0; i < node->as.call_expression.arguments.length; i++) {
-        args[i] = convert_statement(node->as.call_expression.arguments.data[i],
-                                    llvm_module, llvm_context, builder);
+        LLVMValueRef value =
+            convert_statement(node->as.call_expression.arguments.data[i],
+                              llvm_module, llvm_context, builder);
+
+        if (LLVMGetTypeKind(LLVMTypeOf(value)) == LLVMStructTypeKind) {
+          value = LLVMBuildExtractValue(builder, value, 0, "str_data");
+        }
+        args[i] = value;
       }
     }
 
-    // Create function call
     LLVMValueRef call_result =
         LLVMBuildCall2(builder, LLVMGlobalGetValueType(function), function,
                        args, node->as.call_expression.arguments.length, "");
 
-    if (args) {
+    if (args)
       free(args);
-    }
     free(fn_name);
 
     return call_result;
@@ -241,7 +277,50 @@ const char *codegen(AstNode *translation_unit) {
        i < (int)translation_unit->as.translation_unit.declarations.length;
        i++) {
     AstNode *node = translation_unit->as.translation_unit.declarations.data[i];
-    if (node->kind == AST_FUNCTION_DECLARATION) {
+
+    if (node->kind == AST_FOREIGN_DECLARATION) {
+      // Building the function return type.
+      Token return_type = node->as.foreign_declaration.return_type;
+      LLVMTypeRef llvm_return_type =
+          get_llvm_equivalent_for_primitive_type(return_type, llvm_context);
+
+      // Setting up parameter types.
+      LLVMTypeRef *param_types = NULL;
+      unsigned param_count = node->as.foreign_declaration.parameters.length;
+
+      if (param_count > 0) {
+        param_types = malloc(param_count * sizeof(LLVMTypeRef));
+        for (unsigned i = 0; i < param_count; i++) {
+          AstNode *param = node->as.foreign_declaration.parameters.data[i];
+
+          if (param->as.parameter.parameter_type.kind == TOKEN_STRING) {
+            param_types[i] =
+                LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
+          } else {
+            param_types[i] = get_llvm_equivalent_for_primitive_type(
+                param->as.parameter.parameter_type, llvm_context);
+          }
+        }
+      }
+
+      // Building the function.
+      LLVMTypeRef fn_type =
+          LLVMFunctionType(llvm_return_type, param_types, param_count, 0);
+
+      char *fn_name =
+          substring(node->as.foreign_declaration.symbol_name.start_ptr + 1,
+                    node->as.foreign_declaration.symbol_name.length - 2);
+
+      LLVMValueRef fn = LLVMAddFunction(llvm_module, fn_name, fn_type);
+      add_function_to_symbol_table(fn_name, fn);
+
+      if (param_types)
+        free(param_types);
+      free(fn_name);
+      continue;
+    }
+
+    else if (node->kind == AST_FUNCTION_DECLARATION) {
       Token return_type_token = node->as.function_declaration.return_type;
       LLVMTypeRef llvm_return_type = get_llvm_equivalent_for_primitive_type(
           return_type_token, llvm_context);

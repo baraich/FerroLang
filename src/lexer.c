@@ -9,7 +9,10 @@ typedef struct {
   TokenKind kind;
 } SpecialWord;
 
-SpecialWord special_words[] = {{"int", TOKEN_INT}, {"return", TOKEN_RETURN}};
+SpecialWord special_words[] = {{"int", TOKEN_INT},
+                               {"return", TOKEN_RETURN},
+                               {"String", TOKEN_STRING},
+                               {"@foreign", TOKEN_FOREIGN}};
 
 // Function to intialise the lexer.
 void lexer_init(Lexer *lexer, const char *source_code) {
@@ -25,6 +28,12 @@ const char *token_kind_to_string(TokenKind token_kind) {
   switch (token_kind) {
   case TOKEN_INT:
     return "TOKEN_INT";
+  case TOKEN_STRING:
+    return "TOKEN_STRING";
+  case TOKEN_FOREIGN:
+    return "TOKEN_FOREIGN";
+  case TOKEN_STRING_LITERAL:
+    return "TOKEN_STRING_LITERAL";
   case TOKEN_RETURN:
     return "TOKEN_RETURN";
   case TOKEN_INT_LITERAL:
@@ -122,6 +131,27 @@ TokenKind is_special_word(const char *word, size_t token_length) {
   return TOKEN_IDENTIFIER;
 }
 
+// Helper function to make special word.
+Token make_special_word(Lexer *lexer) {
+  // Advance the lexer until the end of word.
+  while (isalpha(peek(lexer)) || isdigit(peek(lexer)) || peek(lexer) == '_') {
+    advance(lexer);
+  }
+
+  size_t token_length = (size_t)(lexer->current_ptr - lexer->start_ptr);
+  for (size_t i = 0; i < sizeof(special_words) / sizeof(SpecialWord); i++) {
+    if (strlen(special_words[i].name) == token_length &&
+        strncmp(lexer->start_ptr, special_words[i].name, token_length) == 0) {
+      return make_token(lexer, special_words[i].kind);
+    }
+  }
+
+  // Error Message
+  fprintf(stderr, "Lexer error: Unrecognized special word '%.*s' at line %zu\n",
+          (int)token_length, lexer->start_ptr, lexer->line);
+  exit(1);
+}
+
 // Helper function to generate identifiers.
 Token make_identifier_token(Lexer *lexer) {
   // Advance the lexer until the end of word.
@@ -143,6 +173,26 @@ Token make_number_token(Lexer *lexer) {
   return make_token(lexer, TOKEN_INT_LITERAL);
 }
 
+Token make_string_token(Lexer *lexer) {
+  // Consume until closing quote or EOF
+  while (peek(lexer) != '"' && peek(lexer) != '\0') {
+    if (peek(lexer) == '\\') {
+      advance(lexer);
+      advance(lexer);
+    } else {
+      advance(lexer);
+    }
+  }
+
+  if (peek(lexer) != '"') {
+    fprintf(stderr, "Unterminated string at line %zu\n", lexer->line);
+    exit(1);
+  }
+
+  advance(lexer);
+  return make_token(lexer, TOKEN_STRING_LITERAL);
+}
+
 // Function to compute next token.
 Token compute_next_token(Lexer *lexer) {
   // Skipping whitespaces and comments.
@@ -153,6 +203,14 @@ Token compute_next_token(Lexer *lexer) {
 
   // Getting the character from the lexer.
   char previous_character = advance(lexer);
+
+  if (previous_character == '"') {
+    return make_string_token(lexer);
+  }
+
+  if (previous_character == '@') {
+    return make_special_word(lexer);
+  }
 
   if (isdigit(previous_character)) {
     return make_number_token(lexer);

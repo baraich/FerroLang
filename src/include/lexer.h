@@ -6,11 +6,14 @@
 // Avaiable Token Possibilites.
 typedef enum {
   TOKEN_INT,
+  TOKEN_STRING,
   TOKEN_RETURN,
+  TOKEN_FOREIGN,
 
   // Literals
   TOKEN_IDENTIFIER,
   TOKEN_INT_LITERAL,
+  TOKEN_STRING_LITERAL,
 
   // Symbols
   TOKEN_LPAREN,

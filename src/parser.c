@@ -32,6 +32,8 @@ bool is_primitive_type(TokenKind token_kind) {
   switch (token_kind) {
   case TOKEN_INT:
     return true;
+  case TOKEN_STRING:
+    return true;
   default:
     return false;
   }
@@ -77,6 +79,12 @@ AstNode *parse_expression(Parser *parser) {
     Token t = advance_parser(parser);
     AstNode *node = ast_new(AST_INT_LITERAL_EXPRESSION, t);
     node->as.literal.token = t;
+    return node;
+  }
+  case TOKEN_STRING_LITERAL: {
+    Token t = advance_parser(parser);
+    AstNode *node = ast_new(AST_STRING_LITERAL_EXPRESSION, t);
+    node->as.string_literal.token = t;
     return node;
   }
   case TOKEN_IDENTIFIER: {
@@ -213,8 +221,68 @@ AstNode *parse_function_declaration(Parser *parser) {
   return fn_node;
 }
 
+// Helper function to parse foreign function.
+AstNode *parse_foreign_declaration(Parser *parser) {
+  advance_with_expect(parser, TOKEN_FOREIGN);
+  advance_with_expect(parser, TOKEN_LPAREN);
+
+  // Parsing the source file.
+  Token source_path = advance_with_expect(parser, TOKEN_STRING_LITERAL);
+  advance_with_expect(parser, TOKEN_COMMA);
+
+  // Parse foreign symbol name.
+  Token symbol_name = advance_with_expect(parser, TOKEN_STRING_LITERAL);
+  advance_with_expect(parser, TOKEN_RPAREN);
+
+  // Return type
+  Token return_type = advance_parser(parser);
+  // Return type
+  if (!is_primitive_type(return_type.kind)) {
+    fprintf(stderr,
+            "Parse error: Expected primitive type for foreign function return "
+            "type at line %zu\n",
+            parser->current_token.line);
+    exit(1);
+  }
+
+  Token fn_name = advance_with_expect(parser, TOKEN_IDENTIFIER);
+
+  advance_with_expect(parser, TOKEN_LPAREN);
+
+  // Building a AST node.
+  AstNode *node = ast_new(AST_FOREIGN_DECLARATION, return_type);
+  node->as.foreign_declaration.return_type = return_type;
+  node->as.foreign_declaration.fn_name = fn_name;
+  node->as.foreign_declaration.source_path = source_path;
+  node->as.foreign_declaration.symbol_name = symbol_name;
+
+  vec_init(AstNode *, &node->as.foreign_declaration.parameters);
+
+  if (!check(parser, TOKEN_RPAREN)) {
+    // Parse parameters
+    do {
+      AstNode *param = parse_parameter(parser);
+      vec_push(AstNode *, &node->as.foreign_declaration.parameters, param);
+      if (check(parser, TOKEN_COMMA)) {
+        advance_parser(parser);
+      } else {
+        break;
+      }
+    } while (true);
+  }
+
+  advance_with_expect(parser, TOKEN_RPAREN);
+  advance_with_expect(parser, TOKEN_SEMICOLON);
+
+  return node;
+}
+
 // Helper function to parse declarations.
 AstNode *parse_declarations(Parser *parser) {
+  if (check(parser, TOKEN_FOREIGN)) {
+    return parse_foreign_declaration(parser);
+  }
+
   if (is_primitive_type(parser->current_token.kind)) {
     return parse_function_declaration(parser);
   }
