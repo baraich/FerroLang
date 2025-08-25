@@ -2,7 +2,6 @@
 @foreign("stdio.h", "printf")
 void _cprintf(String ...args);
 
-
 # Each program must have a main function.
 # This function is executed automatically.
 int main() {
