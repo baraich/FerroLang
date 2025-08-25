@@ -1,0 +1,3 @@
+[submodule "vscode/highlighter"]
+	path = vscode/highlighter
+	url = baraich:baraich/FerroLang-Highlighter
