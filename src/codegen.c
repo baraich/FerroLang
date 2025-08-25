@@ -317,16 +317,20 @@ const char *codegen(AstNode *translation_unit) {
       LLVMTypeRef fn_type =
           LLVMFunctionType(llvm_return_type, param_types, param_count, 0);
 
-      char *fn_name =
+      char *source_name =
           substring(node->as.foreign_declaration.symbol_name.start_ptr + 1,
                     node->as.foreign_declaration.symbol_name.length - 2);
+      char *ferro_fn_name =
+          substring(node->as.foreign_declaration.fn_name.start_ptr,
+                    node->as.foreign_declaration.fn_name.length);
 
-      LLVMValueRef fn = LLVMAddFunction(llvm_module, fn_name, fn_type);
-      add_function_to_symbol_table(fn_name, fn);
+      LLVMValueRef fn = LLVMAddFunction(llvm_module, source_name, fn_type);
+      add_function_to_symbol_table(ferro_fn_name, fn);
 
       if (param_types)
         free(param_types);
-      free(fn_name);
+      free(source_name);
+      free(ferro_fn_name);
       continue;
     }
 

@@ -1,13 +1,19 @@
-# Foreign function to print a number to console.
-@foreign("io.c", "println")
-void println(String msg);
+# Borrowing a helper function from C language,
+# to print text to the console.
+@foreign("stdio.h", "printf")
+void println(String message);
 
-# Each program must have a main function.
+# Function that returns a string.
+String get_message() {
+  return "Hello, World!";
+}
+
+# Each program msut have a main function.
 # This function is executed automatically.
 int main() {
   # Printing to the console.
-  println("Hello, World!");
+  println(get_message());
 
-  # 0 means the program executed successfully.
+  # 0 means the program exited successfully.
   return 0;
 }
