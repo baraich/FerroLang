@@ -1,0 +1,38 @@
+{
+  "name": "highlighter",
+  "displayName": "FerroLang-Highlighter",
+  "version": "0.1.0",
+  "description": "VSCode Syntax Highlighting for FerroLang.",
+  "publisher": "baraich",
+  "repository": "github.com/baraich/FerroLang-Highlighter",
+  "engines": {
+    "vscode": "^1.22.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ferrolang",
+        "aliases": [
+          "FerrloLang",
+          "ferrolang"
+        ],
+        "extensions": [
+          ".fl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ferrolang",
+        "scopeName": "source.ferrolang",
+        "path": "./syntaxes/ferrolang.tmLanguage.json"
+      }
+    ]
+  },
+  "license": "MIT",
+  "packageManager": "pnpm@10.11.0"
+}
