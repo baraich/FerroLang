@@ -65,11 +65,17 @@ AstNode *parse_parameter(Parser *parser) {
   }
 
   Token type_token = advance_parser(parser);
+  bool is_tail_parameter = false;
+  if (check(parser, TOKEN_TAIL)) {
+    is_tail_parameter = true;
+    advance_with_expect(parser, TOKEN_TAIL);
+  }
   Token name_token = advance_with_expect(parser, TOKEN_IDENTIFIER);
 
   AstNode *param_node = ast_new(AST_PARAMETER, type_token);
   param_node->as.parameter.parameter_type = type_token;
   param_node->as.parameter.parameter_name = name_token;
+  param_node->as.parameter.is_tail_parameter = is_tail_parameter;
 
   return param_node;
 }

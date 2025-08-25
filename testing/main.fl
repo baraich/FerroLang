@@ -1,19 +1,14 @@
-# Borrowing a helper function from C language,
-# to print text to the console.
+# Using the built-in C function.
 @foreign("stdio.h", "printf")
-void println(String message);
+void _cprintf(String ...args);
 
-# Function that returns a string.
-String get_message() {
-  return "Hello, World!";
-}
 
-# Each program msut have a main function.
+# Each program must have a main function.
 # This function is executed automatically.
 int main() {
   # Printing to the console.
-  println(get_message());
+  _cprintf("%s\n", "Hello, World!");
 
-  # 0 means the program exited successfully.
+  # Returning 0.
   return 0;
 }

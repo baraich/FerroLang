@@ -3,6 +3,7 @@
 
 #include "helpers.h"
 #include "lexer.h"
+#include "stdbool.h"
 
 // Possible node categories.
 typedef enum {
@@ -29,6 +30,9 @@ typedef enum {
 struct AstNode;
 typedef struct AstNode AstNode;
 
+// Named vector type for AST nodes to avoid anonymous-struct incompatibilities
+typedef Vector(AstNode *) AstNodeVector;
+
 // Represents integers,
 // FUTURE: floats, boolean.
 typedef struct {
@@ -49,19 +53,21 @@ typedef struct {
 typedef struct {
   Token parameter_type;
   Token parameter_name;
+  bool is_tail_parameter;
 } AstParameter;
 
 // Represents a function.
 typedef struct {
   Token return_type;
   Token fn_name;
-  Vector(AstNode *) parameters;
   AstNode *block;
+  bool has_tail_arg;
+  AstNodeVector parameters;
 } AstFunctionDeclaration;
 
 // Represents a block.
 typedef struct {
-  Vector(AstNode *) statements;
+  AstNodeVector statements;
 } AstBlockStatement;
 
 // Represents a return statement.
@@ -71,13 +77,13 @@ typedef struct {
 
 // Represents whole program.
 typedef struct {
-  Vector(AstNode *) declarations;
+  AstNodeVector declarations;
 } AstTranslationUnit;
 
 // Represents a function call.
 typedef struct {
   AstNode *callee;
-  Vector(AstNode *) arguments;
+  AstNodeVector arguments;
 } AstCallExpression;
 
 // Represents a foreign function.
@@ -86,7 +92,7 @@ typedef struct {
   Token fn_name;
   Token source_path;
   Token symbol_name;
-  Vector(AstNode *) parameters;
+  AstNodeVector parameters;
 } AstForeignDeclaration;
 
 struct AstNode {

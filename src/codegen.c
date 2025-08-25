@@ -1,4 +1,5 @@
 #include "include/ast.h"
+#include "include/helpers.h"
 #include "include/lexer.h"
 #include "llvm-c/Analysis.h"
 #include "llvm-c/Core.h"
@@ -84,6 +85,52 @@ get_llvm_equivalent_for_primitive_type(Token primitive_type_token,
   }
 }
 
+char *process_escape_sequences(const char *raw_string, size_t length) {
+  char *processed = malloc(length + 1); // Allocate maximum possible size
+  if (!processed) {
+    fprintf(stderr, "Memory allocation failed\n");
+    exit(1);
+  }
+
+  size_t write_pos = 0;
+  for (size_t read_pos = 0; read_pos < length; read_pos++) {
+    if (raw_string[read_pos] == '\\' && read_pos + 1 < length) {
+      // Process escape sequence
+      switch (raw_string[read_pos + 1]) {
+      case 'n':
+        processed[write_pos++] = '\n';
+        break;
+      case 't':
+        processed[write_pos++] = '\t';
+        break;
+      case 'r':
+        processed[write_pos++] = '\r';
+        break;
+      case '\\':
+        processed[write_pos++] = '\\';
+        break;
+      case '"':
+        processed[write_pos++] = '"';
+        break;
+      case '0':
+        processed[write_pos++] = '\0';
+        break;
+      default:
+        // If it's not a recognized escape sequence, keep both characters
+        processed[write_pos++] = raw_string[read_pos];
+        processed[write_pos++] = raw_string[read_pos + 1];
+        break;
+      }
+      read_pos++; // Skip the escaped character
+    } else {
+      processed[write_pos++] = raw_string[read_pos];
+    }
+  }
+
+  processed[write_pos] = '\0';
+  return processed;
+}
+
 LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
                                LLVMContextRef llvm_context,
                                LLVMBuilderRef builder) {
@@ -103,11 +150,14 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
     char *raw = substring(node->as.string_literal.token.start_ptr + 1,
                           node->as.string_literal.token.length - 2);
 
-    size_t len = strlen(raw);
+    // Process escape sequences
+    char *processed = process_escape_sequences(raw, strlen(raw));
+    size_t len = strlen(processed);
 
     // Create a global constant string
-    LLVMValueRef str_ptr = LLVMBuildGlobalStringPtr(builder, raw, "str");
+    LLVMValueRef str_ptr = LLVMBuildGlobalStringPtr(builder, processed, "str");
     free(raw);
+    free(processed);
 
     LLVMTypeRef i8_ptr =
         LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
@@ -162,8 +212,6 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
 
     LLVMTypeRef fn_type = LLVMGlobalGetValueType(function);
     LLVMTypeRef return_type = LLVMGetReturnType(fn_type);
-    if (LLVMGetTypeKind(return_type) == LLVMVoidTypeKind)
-      return NULL; // Don't propagate result if it's void
 
     return call_result;
   } break;
@@ -177,65 +225,129 @@ LLVMValueRef convert_statement(AstNode *node, LLVMModuleRef llvm_module,
       // For void functions
       LLVMBuildRetVoid(builder);
     }
-    return NULL;
   } break;
   default:
-    printf("Should not have reached this part - statement\n");
+    fprintf(stderr, "Error: Unhandled AST statement kind: %d\n", node->kind);
     exit(1);
   }
+
+  return NULL;
+}
+
+// Helper function to create LLVM function signature from parameters
+typedef struct {
+  LLVMTypeRef function_type;
+  LLVMTypeRef *param_types;
+  unsigned param_count;
+  bool has_tail_arg;
+} FunctionSignature;
+
+FunctionSignature create_function_signature(Token return_type,
+                                            AstNodeVector parameters,
+                                            LLVMContextRef llvm_context,
+                                            bool is_foreign) {
+  // Build return type
+  LLVMTypeRef llvm_return_type =
+      get_llvm_equivalent_for_primitive_type(return_type, llvm_context);
+
+  // Setup parameter types
+  LLVMTypeRef *param_types = NULL;
+  bool has_tail_arg = false;
+  unsigned param_count = parameters.length;
+
+  if (param_count > 0) {
+    param_types = malloc(param_count * sizeof(LLVMTypeRef));
+    for (unsigned i = 0; i < param_count; i++) {
+      AstNode *param = parameters.data[i];
+
+      // Check tail parameter constraint (only for non-foreign functions)
+      if (param->as.parameter.is_tail_parameter) {
+        if (i != param_count - 1) {
+          fprintf(
+              stderr,
+              "Error: Tail parameter must be the last parameter (at position "
+              "%d).\n",
+              i);
+          exit(0);
+        }
+
+        has_tail_arg = true;
+      }
+
+      // Special handling for foreign functions with string parameters
+      if (is_foreign &&
+          param->as.parameter.parameter_type.kind == TOKEN_STRING) {
+        param_types[i] =
+            LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
+      } else {
+        param_types[i] = get_llvm_equivalent_for_primitive_type(
+            param->as.parameter.parameter_type, llvm_context);
+      }
+    }
+  }
+
+  // Create function type
+  LLVMTypeRef function_type = LLVMFunctionType(llvm_return_type, param_types,
+                                               param_count, has_tail_arg);
+
+  FunctionSignature signature = {.function_type = function_type,
+                                 .param_types = param_types,
+                                 .param_count = param_count,
+                                 .has_tail_arg = has_tail_arg};
+
+  return signature;
 }
 
 // Helper function to convert a node to IR.
 void convert_declaration(AstNode *node, LLVMModuleRef llvm_module,
                          LLVMContextRef llvm_context, LLVMBuilderRef builder) {
   switch (node->kind) {
+  case AST_FOREIGN_DECLARATION: {
+    FunctionSignature signature = create_function_signature(
+        node->as.foreign_declaration.return_type,
+        node->as.foreign_declaration.parameters, llvm_context, true);
+
+    char *source_name =
+        substring(node->as.foreign_declaration.symbol_name.start_ptr + 1,
+                  node->as.foreign_declaration.symbol_name.length - 2);
+    char *ferro_fn_name =
+        substring(node->as.foreign_declaration.fn_name.start_ptr,
+                  node->as.foreign_declaration.fn_name.length);
+
+    LLVMValueRef fn =
+        LLVMAddFunction(llvm_module, source_name, signature.function_type);
+    add_function_to_symbol_table(ferro_fn_name, fn);
+
+    // Cleanup
+    if (signature.param_types)
+      free(signature.param_types);
+    free(source_name);
+    free(ferro_fn_name);
+  } break;
+
   case AST_FUNCTION_DECLARATION: {
-    Token return_type_token = node->as.function_declaration.return_type;
-    LLVMTypeRef llvm_return_type =
-        get_llvm_equivalent_for_primitive_type(return_type_token, llvm_context);
+    FunctionSignature signature = create_function_signature(
+        node->as.function_declaration.return_type,
+        node->as.function_declaration.parameters, llvm_context, false);
 
-    // Create parameter types array
-    LLVMTypeRef *param_types = NULL;
-    unsigned param_count = node->as.function_declaration.parameters.length;
-
-    if (param_count > 0) {
-      param_types = malloc(param_count * sizeof(LLVMTypeRef));
-      for (unsigned i = 0; i < param_count; i++) {
-        AstNode *param = node->as.function_declaration.parameters.data[i];
-        param_types[i] = get_llvm_equivalent_for_primitive_type(
-            param->as.parameter.parameter_type, llvm_context);
-      }
-    }
-
-    // Create function type with parameters
-    LLVMTypeRef function_type =
-        LLVMFunctionType(llvm_return_type, param_types, param_count, 0);
-
-    // Defining a function.
-    char *fn_name =
-        (char *)malloc(node->as.function_declaration.fn_name.length + 1);
-    sprintf(fn_name, "%.*s", (int)node->as.function_declaration.fn_name.length,
-            node->as.function_declaration.fn_name.start_ptr);
-    LLVMValueRef fn = LLVMAddFunction(llvm_module, fn_name, function_type);
-
-    // Add function to symbol table
+    char *fn_name = substring(node->as.function_declaration.fn_name.start_ptr,
+                              node->as.function_declaration.fn_name.length);
+    LLVMValueRef fn =
+        LLVMAddFunction(llvm_module, fn_name, signature.function_type);
     add_function_to_symbol_table(fn_name, fn);
 
-    // Defining the function block.
+    // Create function body
     LLVMBasicBlockRef fn_main =
         LLVMAppendBasicBlockInContext(llvm_context, fn, "entry");
-
-    // Positioning the builder in the function block.
     LLVMPositionBuilderAtEnd(builder, fn_main);
 
-    // Converting the statements to IR.
+    // Convert statements to IR
     bool has_return = false;
     AstNode *block_node = node->as.function_declaration.block;
     for (int i = 0; i < (int)block_node->as.block_statement.statements.length;
          i++) {
       AstNode *stmt = block_node->as.block_statement.statements.data[i];
 
-      // Fixed: Check the statement's kind, not the block's kind
       if (stmt->kind == AST_RETURN_STATEMENT) {
         has_return = true;
         convert_statement(stmt, llvm_module, llvm_context, builder);
@@ -245,21 +357,29 @@ void convert_declaration(AstNode *node, LLVMModuleRef llvm_module,
       }
     }
 
-    // If no return statement was found, add a default return
+    // Add default return if none found
     if (!has_return) {
-      LLVMTypeRef type = LLVMInt8TypeInContext(llvm_context);
-      LLVMValueRef default_return = LLVMConstInt(type, 1, 0);
-      LLVMBuildRet(builder, default_return);
+      LLVMTypeRef return_type = LLVMGetReturnType(signature.function_type);
+      if (LLVMGetTypeKind(return_type) == LLVMVoidTypeKind) {
+        LLVMBuildRetVoid(builder);
+      } else {
+        // A non-void function must return a value. Emit an error and exit.
+        fprintf(stderr, "Error: Function must return a value of type ");
+        char *type_str = LLVMPrintTypeToString(return_type);
+        fprintf(stderr, "%s\n", type_str);
+        LLVMDisposeMessage(type_str); // Free the type string memory
+        exit(EXIT_FAILURE);
+      }
     }
 
-    // Free allocated memory
-    if (param_types) {
-      free(param_types);
-    }
+    // Cleanup
+    if (signature.param_types)
+      free(signature.param_types);
     free(fn_name);
   } break;
   default:
-    fprintf(stderr, "Should not have reached here.\n");
+    fprintf(stderr, "Error: Unsupported AST declaration kind: %d\n",
+            node->kind);
     exit(1);
   }
 }
@@ -282,138 +402,12 @@ const char *codegen(AstNode *translation_unit) {
   // Clear symbol table
   symbol_table.count = 0;
 
-  // declare all functions
+  // Process all declarations by calling convert_declaration
   for (int i = 0;
        i < (int)translation_unit->as.translation_unit.declarations.length;
        i++) {
     AstNode *node = translation_unit->as.translation_unit.declarations.data[i];
-
-    if (node->kind == AST_FOREIGN_DECLARATION) {
-      // Building the function return type.
-      Token return_type = node->as.foreign_declaration.return_type;
-      LLVMTypeRef llvm_return_type =
-          get_llvm_equivalent_for_primitive_type(return_type, llvm_context);
-
-      // Setting up parameter types.
-      LLVMTypeRef *param_types = NULL;
-      unsigned param_count = node->as.foreign_declaration.parameters.length;
-
-      if (param_count > 0) {
-        param_types = malloc(param_count * sizeof(LLVMTypeRef));
-        for (unsigned i = 0; i < param_count; i++) {
-          AstNode *param = node->as.foreign_declaration.parameters.data[i];
-
-          if (param->as.parameter.parameter_type.kind == TOKEN_STRING) {
-            param_types[i] =
-                LLVMPointerType(LLVMInt8TypeInContext(llvm_context), 0);
-          } else {
-            param_types[i] = get_llvm_equivalent_for_primitive_type(
-                param->as.parameter.parameter_type, llvm_context);
-          }
-        }
-      }
-
-      // Building the function.
-      LLVMTypeRef fn_type =
-          LLVMFunctionType(llvm_return_type, param_types, param_count, 0);
-
-      char *source_name =
-          substring(node->as.foreign_declaration.symbol_name.start_ptr + 1,
-                    node->as.foreign_declaration.symbol_name.length - 2);
-      char *ferro_fn_name =
-          substring(node->as.foreign_declaration.fn_name.start_ptr,
-                    node->as.foreign_declaration.fn_name.length);
-
-      LLVMValueRef fn = LLVMAddFunction(llvm_module, source_name, fn_type);
-      add_function_to_symbol_table(ferro_fn_name, fn);
-
-      if (param_types)
-        free(param_types);
-      free(source_name);
-      free(ferro_fn_name);
-      continue;
-    }
-
-    else if (node->kind == AST_FUNCTION_DECLARATION) {
-      Token return_type_token = node->as.function_declaration.return_type;
-      LLVMTypeRef llvm_return_type = get_llvm_equivalent_for_primitive_type(
-          return_type_token, llvm_context);
-
-      // Create parameter types array
-      LLVMTypeRef *param_types = NULL;
-      unsigned param_count = node->as.function_declaration.parameters.length;
-
-      if (param_count > 0) {
-        param_types = malloc(param_count * sizeof(LLVMTypeRef));
-        for (unsigned j = 0; j < param_count; j++) {
-          AstNode *param = node->as.function_declaration.parameters.data[j];
-          param_types[j] = get_llvm_equivalent_for_primitive_type(
-              param->as.parameter.parameter_type, llvm_context);
-        }
-      }
-
-      // Create function type with parameters
-      LLVMTypeRef function_type =
-          LLVMFunctionType(llvm_return_type, param_types, param_count, 0);
-
-      // Defining a function.
-      char *fn_name = substring(node->as.function_declaration.fn_name.start_ptr,
-                                node->as.function_declaration.fn_name.length);
-      LLVMValueRef fn = LLVMAddFunction(llvm_module, fn_name, function_type);
-
-      // Add function to symbol table
-      add_function_to_symbol_table(fn_name, fn);
-
-      // Free allocated memory
-      if (param_types) {
-        free(param_types);
-      }
-      free(fn_name);
-    }
-  }
-
-  // implement function bodies
-  for (int i = 0;
-       i < (int)translation_unit->as.translation_unit.declarations.length;
-       i++) {
-    AstNode *node = translation_unit->as.translation_unit.declarations.data[i];
-    if (node->kind == AST_FUNCTION_DECLARATION) {
-      char *fn_name = substring(node->as.function_declaration.fn_name.start_ptr,
-                                node->as.function_declaration.fn_name.length);
-      LLVMValueRef fn = find_function_in_symbol_table(fn_name);
-
-      // Defining the function block.
-      LLVMBasicBlockRef fn_main =
-          LLVMAppendBasicBlockInContext(llvm_context, fn, "entry");
-
-      // Positioning the builder in the function block.
-      LLVMPositionBuilderAtEnd(builder, fn_main);
-
-      // Converting the statements to IR.
-      bool has_return = false;
-      AstNode *block_node = node->as.function_declaration.block;
-      for (int j = 0; j < (int)block_node->as.block_statement.statements.length;
-           j++) {
-        AstNode *stmt = block_node->as.block_statement.statements.data[j];
-
-        if (stmt->kind == AST_RETURN_STATEMENT) {
-          has_return = true;
-          convert_statement(stmt, llvm_module, llvm_context, builder);
-          break;
-        } else {
-          convert_statement(stmt, llvm_module, llvm_context, builder);
-        }
-      }
-
-      // If no return statement was found, add a default return
-      if (!has_return) {
-        LLVMTypeRef type = LLVMInt8TypeInContext(llvm_context);
-        LLVMValueRef default_return = LLVMConstInt(type, 1, 0);
-        LLVMBuildRet(builder, default_return);
-      }
-
-      free(fn_name);
-    }
+    convert_declaration(node, llvm_module, llvm_context, builder);
   }
 
   // Returning the IR back.

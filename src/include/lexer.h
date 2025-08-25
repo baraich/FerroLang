@@ -23,6 +23,7 @@ typedef enum {
   TOKEN_RBRACE,
   TOKEN_SEMICOLON,
   TOKEN_COMMA,
+  TOKEN_TAIL, // ...
 
   // EOF
   TOKEN_EOF

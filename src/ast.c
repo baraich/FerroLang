@@ -101,7 +101,7 @@ void ast_print(const AstNode *node, int indent) {
   case AST_PARAMETER: {
     size_t name_len = node->as.parameter.parameter_name.length;
     size_t type_len = node->as.parameter.parameter_type.length;
-    size_t buffer_size = name_len + type_len + 20; // Extra space for format
+    size_t buffer_size = name_len + type_len + 18; // Extra space for format
 
     char *s = malloc(buffer_size);
     if (!s) {
@@ -109,11 +109,15 @@ void ast_print(const AstNode *node, int indent) {
       exit(1);
     }
 
-    snprintf(s, buffer_size, "-> %.*s(%.*s)\n", (int)type_len,
+    snprintf(s, buffer_size, "-> %.*s(%.*s", (int)type_len,
              node->as.parameter.parameter_type.start_ptr, (int)name_len,
              node->as.parameter.parameter_name.start_ptr);
 
     print_with_indent(s, indent);
+    if (node->as.parameter.is_tail_parameter) {
+      print_with_indent(", is_tail", 0);
+    }
+    print_with_indent(")\n", 0);
     free(s);
   } break;
 

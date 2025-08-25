@@ -27,6 +27,8 @@ void lexer_init(Lexer *lexer, const char *source_code) {
 // Function to convert the token kind to string.
 const char *token_kind_to_string(TokenKind token_kind) {
   switch (token_kind) {
+  case TOKEN_TAIL:
+    return "TOKEN_TAIL";
   case TOKEN_VOID:
     return "TOKEN_VOID";
   case TOKEN_INT:
@@ -206,6 +208,21 @@ Token compute_next_token(Lexer *lexer) {
 
   // Getting the character from the lexer.
   char previous_character = advance(lexer);
+
+  if (previous_character == '.') {
+    if (peek(lexer) == '.') {
+      advance(lexer);
+      if (peek(lexer) == '.') {
+        advance(lexer);
+        return make_token(lexer, TOKEN_TAIL); // Matches '...'
+      }
+
+      // Handle case where it's only '..' (invalid in your grammar)
+      // You might want to return an error token or raise a lexer error here
+      printf("%s", "Unexpected '..'. Did you mean '...'?");
+      exit(1);
+    }
+  }
 
   if (previous_character == '"') {
     return make_string_token(lexer);
